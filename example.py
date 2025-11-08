@@ -34,8 +34,8 @@ async def serial_stream():
         while True:
             if arduino_connection and arduino_connection.in_waiting:
                 data = await asyncio.to_thread(
-                lambda: arduino_connection.readline().decode('utf-8').strip()
-            )
-            yield f"data: {data}\n\n"
+                    lambda: arduino_connection.readline().decode('utf-8').strip()
+                )
+                yield f"data: {data}\n\n"
             await asyncio.sleep(0.1)
     return StreamingResponse(generate(), media_type="text/event-stream")
