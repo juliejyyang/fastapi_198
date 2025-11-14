@@ -1,6 +1,13 @@
 # hospital-delirium-alert
 
-Runtime requirements
+# Runtime requirements
 
-1. `pip install -r requirements.txt`
-2. `python -m uvicorn main:app --reload`
+## install dependencies
+`pip install -r requirements.txt`
+
+## create a .env file with your credentials
+edit .env with your MongoDB URI
+cp .env.example .env
+
+# run
+`python -m uvicorn main:app --reload`
