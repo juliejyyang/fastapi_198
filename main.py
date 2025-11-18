@@ -8,6 +8,9 @@ import asyncio # handles background tasks - allow simultaneous tasks
 from datetime import datetime, timezone, timedelta # calculating 24 hours windows
 import os
 from dotenv import load_dotenv
+from fastapi.staticfiles import StaticFiles
+import re
+import asyncio
 
 # imports 7 functions from db.py (database)
 from db import (
@@ -78,13 +81,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# serve project root (or use a dedicated "static" directory)
+app.mount("/static", StaticFiles(directory="."), name="static")
+
 
 # --- endpoints ---
 
 # home page - shows webpage running
+
 @app.get("/")
 async def home():
-    return {"message: " "Hospital Delirium Alert System running"}
+    # return the dynamic HTML so the page and SSE are same-origin
+    return HTMLResponse(open("home.html", "r").read())
+
+NUMBER_RE = re.compile(r"-?\d+(\.\d+)?")
 
 # endpoint that streams live temperature data from arduino
 @app.get("/stream")
@@ -92,14 +102,50 @@ async def stream_data():
     # never stops streaming data until browser closes
     async def generate():
         while True:
-            temp = await asyncio.to_thread(read_temperature)
-            if temp:
-                try:
-                    insert_reading("patient1", float(temp))
-                    yield f"data: {temp}\n\n"
-                except:
-                    pass
-            await asyncio.sleep(60) # read temperature every minute
+            raw_temp = await asyncio.to_thread(read_temperature)
+
+            # normalize bytes -> str
+            if isinstance(raw_temp, (bytes, bytearray)):
+                raw_temp = raw_temp.decode(errors="ignore")
+            
+            if not raw_temp:
+                yield ": keep-alive\n\n"
+                await asyncio.sleep(0.2)
+                continue
+
+            # split into lines (handle fragmented/concatenated input)
+            parts = re.split(r'[\r\n]+', str(raw_temp))
+            # pick last non-empty part (most recent complete token)
+            token = None
+            for p in reversed(parts):
+                if p and p.strip():
+                    token = p.strip()
+                    break
+
+            # extract first numeric substring if token contains extras
+            if token:
+                m = NUMBER_RE.search(token)
+                if m:
+                    s = m.group(0)
+                    try:
+                        val = float(s)
+                    except Exception:
+                        val = None
+                else:
+                    val = None
+            else:
+                val = None
+
+            # sanity check: human temps ~30-42 C (adjust for your sensor)
+            if val is None or val < 10 or val > 60:
+                # ignore bad values, send keep-alive or debug comment
+                yield ": invalid\n\n"
+            else:
+                # insert into DB off-loop if needed
+                await asyncio.to_thread(insert_reading, "patient1", val)
+                yield f"data: {val}\n\n"
+
+            await asyncio.sleep(0.2)
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 # dashboard endpoint that returns all patients organized into the alert tiers
@@ -154,7 +200,7 @@ async def patient_detail(patient_id: str):
             "name": patient["name"],
             "room": patient["room_number"],
             "baseline_temp": patient["baseline_temp"],
-            "days_admitted": (datetime.now(timezone.utc) - patient["admission_date"]).days
+            "days_admitted": (datetime.now(timezone.utc) - patient["admission_date"].replace(tzinfo=timezone.utc)).days
         },
         "scores": [{"time": str(s["calculated_at"]), "score": s["score"]} for s in scores],
         "alerts": [{"type": a["alert_type"], "time": str(a["triggered_at"])} for a in alerts]
