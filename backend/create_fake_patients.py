@@ -1,8 +1,10 @@
-from backend.db import connect_db, db
+from db import connect_db
 from datetime import datetime, timezone
 import random
 
 connect_db()
+
+from db import db as database
 
 # Create 10 fake patients
 fake_patients = [
@@ -19,9 +21,9 @@ fake_patients = [
 
 for fake in fake_patients:
     # Check if already exists
-    existing = db.patients.find_one({"name": fake["name"]})
+    existing = database.patients.find_one({"name": fake["name"]})
     if not existing:
-        db.patients.insert_one({
+        database.patients.insert_one({
             "name": fake["name"],
             "room_number": fake["room"],
             "baseline_temp": 36.5,
@@ -32,8 +34,8 @@ for fake in fake_patients:
         
         # Add fake variability scores
         score = random.uniform(2, 12)  # Random scores for demo
-        db.variability_scores.insert_one({
-            "patient_id": db.patients.find_one({"name": fake["name"]})["_id"],
+        database.variability_scores.insert_one({
+            "patient_id": database.patients.find_one({"name": fake["name"]})["_id"],
             "score": score,
             "calculated_at": datetime.now(timezone.utc)
         })

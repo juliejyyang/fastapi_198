@@ -181,7 +181,7 @@ async def dashboard():
         if admission_date.tzinfo is None:
             admission_date = admission_date.replace(tzinfo=timezone.utc)
         
-        days = (datetime.now(timezone.utc) - patient["admission_date"])
+        days = (datetime.now(timezone.utc) - admission_date).days
 
         result[tier].append({
             "id": str(patient["_id"]),
