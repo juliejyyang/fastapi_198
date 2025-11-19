@@ -1,0 +1,17 @@
+.search-box {
+    width: 100px;
+    height: 50px;
+    background-color: beige;
+}
+
+.patient-box {
+    width: 100px;
+    height: 100px;
+    background-color: aqua;
+}
+
+.flex-container {
+    gap: 50px;
+    display: flex;
+}
+

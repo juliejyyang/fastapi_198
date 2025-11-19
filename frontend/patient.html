@@ -5,24 +5,19 @@
 </head>
 <body>
     <h1>Patient Dashboard</h1>
-
     <div>Name: Naru Crunchy</div>
-
     <div>Temperature reading: <span id = "temp"> waiting...</span></div>
 
     <canvas id="liveTempChart" width="300" height="100"></canvas>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/liveChart.js"></script>
+
     <script>
         const eventSource = new EventSource('/stream');
-        
         eventSource.onmessage = (event) => {
             document.getElementById("temp").textContent = event.data;
         };
     </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <script src="/static/liveChart.js"></script>
-    
 </body>
 </html>

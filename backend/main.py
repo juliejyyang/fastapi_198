@@ -10,10 +10,11 @@ import os
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
 import re
-import asyncio
+from pathlib import Path
+from bson import ObjectId
 
-# imports 7 functions from db.py (database)
-from db import (
+# import function from db.py (database functions)
+from backend.db import (
     connect_db, # connects to mongodb
     insert_reading, # saves temp to database when arduino send data
     get_readings_24h, # gets all readings from last 24 hrs - used in background tasks to calculate variability
@@ -24,9 +25,9 @@ from db import (
 )
 
 # imports some more functions
-from arduino_handler import connect_arduino, read_temperature, close_arduino
+from backend.arduino_handler import connect_arduino, read_temperature, close_arduino
 # MIGHT want to delete detect outliers and use ai model
-from calculations import calculate_variability, detect_outliers
+from backend.calculations import calculate_variability, detect_outliers
 
 # runs function - loads .env file into memory so os.getenv() can work w it
 load_dotenv()
@@ -38,13 +39,10 @@ async def lifespan(app: FastAPI):
     connect_db()
     connect_arduino()
 
-    # infinite loop that runs every 6 hours
-    # calculates patient score every 6 hours
+    # infinite loop that runs every 6 hours, calculates patient score every 6 hours (15 mins for testing)
     async def background_calc():
         while True:
-            # pauses for 6 hours
-            await asyncio.sleep(6 * 3600)
-            # below begins after 6 hours
+            # below begins after 6 hours (15 mins)
             patients = get_all_patients() # store patients from database into a list
             
             # files through the list of patients
@@ -70,6 +68,8 @@ async def lifespan(app: FastAPI):
                         create_alert(patient["_id"], "red", score)
                     elif score >= 5.0:
                         create_alert(patient["_id"], "yellow", score)
+                    
+            await asyncio.sleep(900)
     
     # starts the background task while app handles requests
     asyncio.create_task(background_calc())
@@ -81,20 +81,28 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
 # serve project root (or use a dedicated "static" directory)
-app.mount("/static", StaticFiles(directory="."), name="static")
+app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent /"frontend"), name="static")
 
 
-# --- endpoints ---
+# --- endpoints --- #
 
 # home page - shows webpage running
 
-@app.get("/")
-async def home():
+@app.get("/dashboard")
+async def dashboard():
     # return the dynamic HTML so the page and SSE are same-origin
-    return HTMLResponse(open("home.html", "r").read())
+    base = Path(__file__).parent.parent
+    return HTMLResponse(base.joinpath("frontend","dashboard.html").read_text(encoding="utf-8"))
+
+@app.get("/patient")
+async def patient():
+    base = Path(__file__).parent.parent
+    return HTMLResponse(base.joinpath("frontend","patient.html").read_text(encoding="utf-8"))
 
 NUMBER_RE = re.compile(r"-?\d+(\.\d+)?")
+patient_id = ObjectId("691bcd11af15fc8ebcb9316a")
 
 # endpoint that streams live temperature data from arduino
 @app.get("/stream")
@@ -142,10 +150,10 @@ async def stream_data():
                 yield ": invalid\n\n"
             else:
                 # insert into DB off-loop if needed
-                await asyncio.to_thread(insert_reading, "patient1", val)
+                await asyncio.to_thread(insert_reading, patient_id, val)
                 yield f"data: {val}\n\n"
 
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(30)
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 # dashboard endpoint that returns all patients organized into the alert tiers
@@ -155,10 +163,10 @@ async def stream_data():
 async def dashboard():
     patients = get_all_patients()
     # organize patients by alter tier
-    result = {"red": [], "yellow": [], "green:": []}
+    result = {"red": [], "yellow": [], "green": []}
 
     for patient in patients:
-        from db import get_latest_score
+        from backend.db import get_latest_score
         score_doc = get_latest_score(patient["_id"])
         score = score_doc["score"] if score_doc else 0
 
@@ -168,6 +176,10 @@ async def dashboard():
             tier = "yellow"
         else:
             tier = "green"
+
+        admission_date = patient["admission_date"]
+        if admission_date.tzinfo is None:
+            admission_date = admission_date.replace(tzinfo=timezone.utc)
         
         days = (datetime.now(timezone.utc) - patient["admission_date"])
 
@@ -186,7 +198,7 @@ async def dashboard():
 # returns alert history (moving between alert tiers) over a week
 @app.get("/api/patient/{patient_id}")
 async def patient_detail(patient_id: str):
-    from db import get_patient, get_scores_7_days, get_alerts_7_days
+    from backend.db import get_patient, get_scores_7_days, get_alerts_7_days
 
     patient = get_patient(patient_id)
     if not patient:

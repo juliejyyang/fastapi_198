@@ -24,8 +24,8 @@ document.addEventListener('DOMContentLoaded', () => {
             scales: {
                 x: { display: true },
                 y: {
-                    min: 17,
-                    max: 40,
+                    min: 20,
+                    max: 27,
                     ticks: { stepSize: 0.5},
                 }
             }

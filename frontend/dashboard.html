@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hospital Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        h1 {
+            color: #333;
+        }
+        
+        .search-box {
+            width: 300px;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .risk-section {
+            margin-bottom: 30px;
+        }
+        
+        .risk-section h3 {
+            padding: 10px;
+            color: white;
+            border-radius: 4px;
+        }
+        
+        .high-risk { background-color: #dc3545; }
+        .moderate-risk { background-color: #ffc107; color: #333; }
+        .low-risk { background-color: #28a745; }
+        
+        .flex-container {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .patient-box {
+            background-color: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            width: 200px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .patient-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .patient-box .name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 8px;
+        }
+        
+        .patient-box .room {
+            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        .patient-box .score {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .patient-box .days {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Patient Status Dashboard</h1>
+    <input type="text" class="search-box" id="searchBox" placeholder="Search patient by name or room...">
+    
+    <div id="dashboard">
+        <div class="loading">Loading patients...</div>
+    </div>
+
+    <script>
+        let allPatients = { red: [], yellow: [], green: [] };
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/dashboard');
+                allPatients = await response.json();
+                renderDashboard(allPatients);
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                document.getElementById('dashboard').innerHTML = 
+                    '<div class="loading">Error loading patients. Please refresh.</div>';
+            }
+        }
+
+        function renderDashboard(data) {
+            const dashboard = document.getElementById('dashboard');
+            
+            let html = '';
+            
+            // High Risk (Red)
+            if (data.red && data.red.length > 0) {
+                html += `
+                    <div class="risk-section">
+                        <h3 class="high-risk">High Risk (${data.red.length})</h3>
+                        <div class="flex-container">
+                            ${data.red.map(p => createPatientBox(p, '#dc3545')).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Moderate Risk (Yellow)
+            if (data.yellow && data.yellow.length > 0) {
+                html += `
+                    <div class="risk-section">
+                        <h3 class="moderate-risk">Moderate Risk (${data.yellow.length})</h3>
+                        <div class="flex-container">
+                            ${data.yellow.map(p => createPatientBox(p, '#ffc107')).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Low Risk (Green)
+            if (data.green && data.green.length > 0) {
+                html += `
+                    <div class="risk-section">
+                        <h3 class="low-risk">Low Risk (${data.green.length})</h3>
+                        <div class="flex-container">
+                            ${data.green.map(p => createPatientBox(p, '#28a745')).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (html === '') {
+                html = '<div class="loading">No patients found</div>';
+            }
+            
+            dashboard.innerHTML = html;
+        }
+
+        function createPatientBox(patient, color) {
+            return `
+                <div class="patient-box" onclick="window.location.href='/patient?id=${patient.id}'">
+                    <div class="name">${patient.name}</div>
+                    <div class="room">Room ${patient.room}</div>
+                    <div class="score" style="color: ${color}">${patient.score}</div>
+                    <div class="days">${patient.days_admitted} days admitted</div>
+                </div>
+            `;
+        }
+
+        // Search functionality
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            if (searchTerm === '') {
+                renderDashboard(allPatients);
+                return;
+            }
+            
+            const filtered = {
+                red: allPatients.red.filter(p => 
+                    p.name.toLowerCase().includes(searchTerm) || 
+                    p.room.toLowerCase().includes(searchTerm)
+                ),
+                yellow: allPatients.yellow.filter(p => 
+                    p.name.toLowerCase().includes(searchTerm) || 
+                    p.room.toLowerCase().includes(searchTerm)
+                ),
+                green: allPatients.green.filter(p => 
+                    p.name.toLowerCase().includes(searchTerm) || 
+                    p.room.toLowerCase().includes(searchTerm)
+                )
+            };
+            
+            renderDashboard(filtered);
+        });
+
+        // Load dashboard on page load
+        loadDashboard();
+        
+        // Refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>
