@@ -236,7 +236,7 @@
             document.getElementById('temp').textContent = value.toFixed(2) + '°C';
         }
 
-        // Connect to SSE stream
+        // connects to SSE stream
         const es = new EventSource('/stream');
 
         es.onmessage = (ev) => {
