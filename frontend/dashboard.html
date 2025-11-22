@@ -200,6 +200,46 @@
         
         // Refresh every 30 seconds
         setInterval(loadDashboard, 30000);
+
+//EDITS FOR THE ALERT SYSTEM -----------------------------------------------------------------------
+        const dashboardES = new EventSource('/stream');
+        buttonEventSource.addEventListener('button', (event) => {
+            alert('🚨 PATIENT NEEDS ASSISTANCE! 🚨');
+    
+            // Optionally reload dashboard to show updated status
+            loadDashboard();
+        });
+
+        const buttonEventSource = new EventSource('/stream');
+        buttonEventSource.addEventListener('button', (event) => {
+            showButtonAlert();
+        });
+
+        function showButtonAlert() {
+    // Create alert banner
+            const banner = document.createElement('div');
+            banner.className = 'alert-banner';
+            banner.innerHTML = `
+                <h3>🚨 PATIENT NEEDS ASSISTANCE</h3>
+                <p>A patient has pressed their call button</p>
+                <button onclick="acknowledgeAlert(this)">Acknowledge</button>
+            `;
+            document.body.appendChild(banner);
+    
+    // Play sound (optional)
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjGN0vLTgjMGHm7A7+OZQQ0PVKzn77BgGgc+ltrzxnMpBSh+zPDdjkALElCn5O+zZBoKN4/T8s5+LASB0fPcgzMKF2O/7OihTw4MW6zp6qxXFAlMouLyumwiCzGS1fPTgysFLYPN8N+TQQsMWLPp7KdPDhBVqefvu2YcBUWa3fPHditECiR9zu/hlEILEVy16OqsVxMKS5/h8rtwIQwwiM/y1IU1BSpxyO/hmkQNEVew6eypVBELTKHi87pvJAsvic7x1YY2Bip1yu7hm0UOEFOr6uy0YhsIO5fV8sR7LAYqccru35lFDhFYsuvssmIbCDqV1fPDfS0HKnLJ7uGbRg4RV7Lr7LRkGwg5lNXyxH0tByp0yuvhnEYOEVmy7Oy1ZRsIOZTV8sSBLQcpdcrv4JpFDhBUsuvstWQbCDqU1fPEgS0HKHbK7d+bRQ0PVLPs7LVkGgg5lNTzxIItByh2yuzfm0YOEFSx6+u1ZBoHOpXV88SCLQcodsvs4JxGDhBTsevstmYbBziU1fPDgy4HKXfL7N+bRg4PU7Hs7LhlGwc4ldXywn0uByl1yu3gnEYOD1Ox7Oy4ZhsGOJXU8sJ9LgcqeMvt4JtFDw9Us+zsuGYbBjiV1PLCfS4HKnjL7eCbRg4PVLPs7LhmGgU4ltTzwn4vByl4y+3gm0YOEFOy7Oy4Zhr/+5jU88F+Lwcpecvs4JxGDhBTsevsuGYa//6Y1fPBfi8GKXnM7OCcRg4PU7Ls7LhnGv/+mNXzwX4vByt6y+zgnEYOD1Oy7Oy4Zxv//ZnU88F+Lwcrdsvt4JtGDw9Tsuzrt2Ya//6Z1fPBfi8HK3nL7eCcRg8PVLPs67dmGv/+mdXzwX4vByt5y+3gnEYPD1Oz7Ou3Zhr//pnV88F+Lwcred');
+            audio.play();
+        }
+
+        function acknowledgeAlert(button) {
+    // Remove the banner
+            const banner = button.closest('.alert-banner');
+            banner.remove();
+    
+    // Reload dashboard to refresh
+            loadDashboard();
+        }
+        
     </script>
 </body>
 </html>

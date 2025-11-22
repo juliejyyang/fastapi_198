@@ -1,4 +1,4 @@
-from backend.db import connect_db, create_patient
+from db import connect_db, create_patient
 
 connect_db()
 

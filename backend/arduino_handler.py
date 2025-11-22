@@ -3,7 +3,7 @@ import serial
 connection = None
 
 # connect to arduino
-def connect_arduino(port='/dev/cu.usbmodem101', baudrate=9600):
+def connect_arduino(port='/dev/cu.usbmodem2101', baudrate=9600):
     global connection
     # troubleshooting
     try:

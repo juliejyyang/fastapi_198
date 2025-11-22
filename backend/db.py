@@ -117,3 +117,70 @@ def get_alerts_7_days(patient_id):
         "patient_id": patient_id,
         "triggered_at": {"$gte": week_ago}
     }).sort("triggered_at", -1))
+
+# NEW EDITS FOR THE ALERT THING 
+
+# --- BUTTON PRESS ALERTS ---
+def create_button_alert(patient_id, message="Patient pressed call button"):
+    """
+    Creates an immediate alert when patient presses the button
+    This is separate from the variability score alerts
+    """
+    db.button_alerts.insert_one({
+        "patient_id": patient_id,
+        "alert_type": "button_press",
+        "triggered_at": datetime.now(timezone.utc),
+        "message": message,
+        "acknowledged": False,
+        "response_time": None  # Will be set when nurse acknowledges
+    })
+    print(f"Button alert created for patient {patient_id}")
+
+
+def acknowledge_button_alert(alert_id, nurse_id=None):
+    """
+    Acknowledges button press alert and records response time
+    """
+    alert = db.button_alerts.find_one({"_id": ObjectId(alert_id)})
+    
+    if alert:
+        triggered_at = alert["triggered_at"]
+        acknowledged_at = datetime.now(timezone.utc)
+        response_time_seconds = (acknowledged_at - triggered_at).total_seconds()
+        
+        db.button_alerts.update_one(
+            {"_id": ObjectId(alert_id)},
+            {
+                "$set": {
+                    "acknowledged": True,
+                    "acknowledged_at": acknowledged_at,
+                    "response_time": response_time_seconds,
+                    "nurse_id": nurse_id
+                }
+            }
+        )
+        return response_time_seconds
+    return None
+
+
+def get_unacknowledged_button_alerts(patient_id=None):
+    """
+    Get all unacknowledged button press alerts
+    If patient_id is provided, filter by that patient
+    """
+    query = {"acknowledged": False}
+    if patient_id:
+        query["patient_id"] = patient_id
+    
+    return list(db.button_alerts.find(query).sort("triggered_at", -1))
+
+
+def get_button_alerts_24h(patient_id):
+    """
+    Get all button press alerts from last 24 hours for a patient
+    """
+    twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+    return list(db.button_alerts.find({
+        "patient_id": patient_id,
+        "triggered_at": {"$gte": twenty_four_hours_ago}
+    }).sort("triggered_at", -1))
