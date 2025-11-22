@@ -22,11 +22,6 @@ from backend.db import (
     store_score, # saves variability score - background task
     create_alert, # creates alert - when score is high
     ack_alert, # marks alert as acknolwedge by nurse
-    #EDIT FOR THE ALERT SYSTEM FOR HELP 
-    create_button_alert,  # ADD THIS LINE
-    acknowledge_button_alert,  # ADD THIS LINE
-    get_unacknowledged_button_alerts,  # ADD THIS LINE
-    get_button_alerts_24h,
     db
 )
 
@@ -125,16 +120,6 @@ async def stream_data():
                 yield ": keep-alive\n\n"
                 await asyncio.sleep(0.2)
                 continue
-
-            #EDIT FOR THE THING ALERT THING 
-            if "pressed" in raw_temp.lower():
-                # Create button alert in database
-                await asyncio.to_thread(create_button_alert, patient_id, raw_temp)
-                
-                # Send button press event to frontend
-                yield f"event: button\ndata: pressed\n\n"
-                await asyncio.sleep(0.5)
-                continue 
 
             # split into lines (handle fragmented/concatenated input)
             parts = re.split(r'[\r\n]+', str(raw_temp))
@@ -239,68 +224,3 @@ async def patient_detail(patient_id: str):
 async def ack_alert(alert_id: str):
     ack_alert(alert_id)
     return {"status": "acknowledged"}
-
-# EDITS FOR THE NEW ALERT THING 
-
-# NEW: Get unacknowledged button alerts for dashboard
-@app.get("/api/button-alerts")
-async def get_button_alerts_endpoint():
-    """
-    Returns all unacknowledged button press alerts
-    """
-    alerts = get_unacknowledged_button_alerts()
-    
-    result = []
-    for alert in alerts:
-        from backend.db import get_patient
-        patient = get_patient(str(alert["patient_id"]))
-        
-        result.append({
-            "alert_id": str(alert["_id"]),
-            "patient_id": str(alert["patient_id"]),
-            "patient_name": patient["name"] if patient else "Unknown",
-            "room": patient["room_number"] if patient else "N/A",
-            "triggered_at": str(alert["triggered_at"]),
-            "message": alert.get("message", "Patient needs assistance"),
-            "acknowledged": alert["acknowledged"]
-        })
-    
-    return result
-
-
-# NEW: Acknowledge button press alert
-@app.post("/api/button-alert/{alert_id}/acknowledge")
-async def ack_button_alert_endpoint(alert_id: str):
-    """
-    Acknowledges a button press alert and returns response time
-    """
-    response_time = acknowledge_button_alert(alert_id)
-    
-    if response_time is not None:
-        return {
-            "status": "acknowledged",
-            "response_time_seconds": round(response_time, 2),
-            "response_time_minutes": round(response_time / 60, 2)
-        }
-    else:
-        return {"error": "Alert not found"}
-
-
-# NEW: Get patient's button press history
-@app.get("/api/patient/{patient_id}/button-alerts")
-async def patient_button_history(patient_id: str):
-    """
-    Returns button press history for a patient (last 24 hours)
-    """
-    alerts = get_button_alerts_24h(patient_id)
-    
-    result = []
-    for alert in alerts:
-        result.append({
-            "triggered_at": str(alert["triggered_at"]),
-            "acknowledged": alert["acknowledged"],
-            "response_time": alert.get("response_time"),
-            "acknowledged_at": str(alert.get("acknowledged_at")) if alert.get("acknowledged_at") else None
-        })
-    
-    return {"button_alerts": result}
