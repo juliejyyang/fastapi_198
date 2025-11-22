@@ -1,7 +1,7 @@
 # main.py: all endpoints stored here
 
 # imports + setup
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 from contextlib import asynccontextmanager
 import asyncio # handles background tasks - allow simultaneous tasks
@@ -10,8 +10,11 @@ import os
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
 import re
+import time
 from pathlib import Path
 from bson import ObjectId
+from backend.calculations import calculate_variability, detect_outliers
+
 
 # import function from db.py (database functions)
 from backend.db import (
@@ -91,7 +94,7 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent.parent /"fronte
 
 # home page - shows webpage running
 @app.get("/")
-async def dashboard():
+async def root():
     # return the dynamic HTML so the page and SSE are same-origin
     base = Path(__file__).parent.parent
     return HTMLResponse(base.joinpath("frontend","dashboard.html").read_text(encoding="utf-8"))
@@ -110,51 +113,77 @@ patient_id = ObjectId("691bcd11af15fc8ebcb9316a")
 # endpoint that streams live temperature data from arduino
 @app.get("/stream")
 async def stream_data():
-    # never stops streaming data until browser closes
     async def generate():
+        keepalive_interval = 5.0
+        last_keepalive = 0.0
+
         while True:
-            raw_temp = await asyncio.to_thread(read_temperature)
+            # read from serial off the event loop
+            raw = await asyncio.to_thread(read_temperature)
+
             # normalize bytes -> str
-            if isinstance(raw_temp, (bytes, bytearray)):
-                raw_temp = raw_temp.decode(errors="ignore")
-            if not raw_temp:
-                yield ": keep-alive\n\n"
+            if isinstance(raw, (bytes, bytearray)):
+                raw = raw.decode(errors="ignore")
+
+            if not raw:
+                # occasionally send a comment so the client doesn't time out
+                if time.time() - last_keepalive > keepalive_interval:
+                    last_keepalive = time.time()
+                    yield ": keep-alive\n\n"
                 await asyncio.sleep(0.2)
                 continue
-            # split into lines (handle fragmented/concatenated input)
-            parts = re.split(r'[\r\n]+', str(raw_temp))
-            # pick last non-empty part (most recent complete token)
+
+            # handle fragmented / concatenated input: split on newlines and pick last non-empty chunk
+            parts = re.split(r'[\r\n]+', str(raw))
             token = None
             for p in reversed(parts):
                 if p and p.strip():
                     token = p.strip()
                     break
-            
-            # Extract temperature value after "Temp °C:"
-            if token:
-                # Look for "Temp °C: " followed by a number
-                temp_match = re.search(r'Temp °C:\s*([-\d.]+)', token)
-                if temp_match:
-                    try:
-                        val = float(temp_match.group(1))
-                    except Exception:
-                        val = None
-                else:
-                    val = None
-            else:
-                val = None
 
-            # sanity check: human temps ~30-42 C (adjust for your sensor)
-            if val is None or val < 10 or val > 60:
-                # ignore bad values, send keep-alive or debug comment
-                yield ": invalid\n\n"
-                print(f"DEBUG: decoded = {raw_temp}")  # ADD THIS
-            else:
-                # insert into DB off-loop if needed
-                await asyncio.to_thread(insert_reading, patient_id, val)
-                yield f"data: {val}\n\n"
+            if not token:
+                print("DEBUG: empty token from raw:", repr(raw))
+                if time.time() - last_keepalive > keepalive_interval:
+                    last_keepalive = time.time()
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(0.2)
+                continue
+                
+            # extract number substring
+            m = NUMBER_RE.search(token)
+            if not m:
+                print("DEBUG: no number found in token:", repr(token), "raw:", repr(raw))
+                if time.time() - last_keepalive > keepalive_interval:
+                    last_keepalive = time.time()
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(0.2)
+                continue
 
-            await asyncio.sleep(5)
+            try:
+                val = float(m.group(0))
+            except Exception:
+                print("DEBUG: could not parse float from:", m.group(0), "raw:", repr(raw))
+                if time.time() - last_keepalive > keepalive_interval:
+                    last_keepalive = time.time()
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(0.2)
+                continue
+
+            # sanity check the value (adjust min/max for your sensor)
+            if val < 10 or val > 60:
+                print("DEBUG: out-of-range value:", val, "raw:", repr(raw))
+                if time.time() - last_keepalive > keepalive_interval:
+                    last_keepalive = time.time()
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(0.2)
+                continue
+
+            # good value: insert and send to clients
+            await asyncio.to_thread(insert_reading, patient_id, val)  # ensure patient_id is set correctly
+            yield f"data: {val:.2f}\n\n"
+
+            await asyncio.sleep(0.2)
+
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 # dashboard endpoint that returns all patients organized into the alert tiers
@@ -224,3 +253,14 @@ async def patient_detail(patient_id: str):
 async def ack_alert(alert_id: str):
     ack_alert(alert_id)
     return {"status": "acknowledged"}
+
+@app.get("/api/patient/{patient_id}/variability")
+async def patient_variability(patient_id: str):
+    # run DB read in thread to avoid blocking the event loop
+    readings = await asyncio.to_thread(get_readings_24h, patient_id)
+    temps = [r["temperature"] for r in readings]
+    if not temps:
+        return {"patient_id": patient_id, "score": None, "count": 0}
+    filtered, outliers = detect_outliers(temps)
+    score = calculate_variability(filtered)
+    return {"patient_id": patient_id, "score": float(score), "count": len(temps)}

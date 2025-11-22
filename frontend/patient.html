@@ -123,7 +123,7 @@
     <div class="chart-container">
         <h2>Delirium Risk Score</h2>
         <div id="scoreDisplay" class="score-display score-green">
-            <div id="scoreValue">Calculating...</div>
+            <div id="scoreValue">Loading...</div>
             <div style="font-size: 18px; margin-top: 10px;" id="scoreLabel">Variability Score</div>
         </div>
     </div>
@@ -258,11 +258,30 @@
             document.getElementById('temp').textContent = 'Connection lost';
         };
 
+        async function loadVariabilityScore() {
+            if (!patientId) return;
+            try {
+                const resp = await fetch(`/api/patient/${patientId}/variability`);
+                const body = await resp.json();
+                if (body && body.score !== null) {
+                    updateScoreDisplay(body.score);
+                    document.getElementById('scoreValue').textContent = body.score.toFixed(2);
+                } else {
+                    document.getElementById('scoreValue').textContent = 'N/A';
+                }
+            } catch (e) {
+                console.error('Error fetching variability score', e);
+            }
+        }
+
         // loads patient details on page load
         loadPatientDetails();
         
         // refreshes patient details every minute
         setInterval(loadPatientDetails, 60000);
+
+        loadPatientDetails().then(loadVariabilityScore);
+        setInterval(loadVariabilityScore, 5_000); // refresh every minute
     </script>
 </body>
 </html>

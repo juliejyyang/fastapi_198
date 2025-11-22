@@ -33,11 +33,20 @@ def insert_reading(patient_id, temperature):
     })
 
 def get_readings_24h(patient_id):
-    twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
-    return list(db.raw_readings.find({
+    """Get readings from last 1 minute (despite function name)"""
+    one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
+    
+    # Convert string to ObjectId if needed
+    if isinstance(patient_id, str):
+        patient_id = ObjectId(patient_id)
+    
+    readings = list(db.raw_readings.find({
         "patient_id": patient_id,
-        "timestamp": {"$gte": twenty_four_hours_ago}
+        "timestamp": {"$gte": one_minute_ago}
     }).sort("timestamp", -1))
+    
+    print(f"DEBUG get_readings_24h: Found {len(readings)} readings for patient {patient_id}")
+    return readings
 
 
 # --- PATIENTS ---
