@@ -19,7 +19,7 @@ def read_temperature():
             connection.timeout = 1  # 1 second timeout
             if connection.in_waiting:
                 line = connection.readline().decode('utf-8').strip()
-                return line
+                return line #returns either temp or the help button 
         except Exception as e:
             print(f"Error reading from Arduino: {e}")
             return None

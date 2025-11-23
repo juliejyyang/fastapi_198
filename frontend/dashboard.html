@@ -84,6 +84,87 @@
             padding: 20px;
             color: #666;
         }
+
+        /* NEW CODE STARTS HERE */
+        .help-alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .help-alert-content {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .help-alert-icon {
+            font-size: 32px;
+            animation: pulse 1s infinite;
+        }
+
+        .help-alert-text {
+            flex: 1;
+            font-size: 16px;
+            line-height: 1.4;
+        }
+
+        .help-alert-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            font-size: 20px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .help-alert-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+        /* NEW CODE ENDS HERE */
     </style>
 </head>
 <body>
@@ -201,6 +282,49 @@
         // Refresh every 30 seconds
         setInterval(loadDashboard, 30000);
         
+        // NEW CODE STARTS HERE
+        const helpEventSource = new EventSource('/stream');
+
+        helpEventSource.onmessage = function(event) {
+            const data = event.data;
+            
+            try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === "HELP_REQUEST") {
+                    showHelpAlert(parsed.name, parsed.room);
+                }
+            } catch (e) {
+                // Not a help request, ignore
+            }
+        };
+
+        helpEventSource.onerror = function(err) {
+            console.error('Help request SSE error:', err);
+        };
+
+        function showHelpAlert(patientName, roomNumber) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'help-alert';
+            alertDiv.innerHTML = '<div class="help-alert-content">' +
+                '<div class="help-alert-icon">🚨</div>' +
+                '<div class="help-alert-text">' +
+                '<strong>' + patientName + '</strong> in Room <strong>' + roomNumber + '</strong> has requested assistance!' +
+                '</div>' +
+                '<button class="help-alert-close" onclick="this.parentElement.parentElement.remove()">✕</button>' +
+                '</div>';
+            
+            document.body.appendChild(alertDiv);
+            setTimeout(function() {
+                if (alertDiv.parentElement) {
+                    alertDiv.classList.add('fade-out');
+                    setTimeout(function() {
+                        alertDiv.remove();
+                    }, 500);
+                }
+            }, 10000);
+        }
+        // NEW CODE ENDS HERE
+
     </script>
 </body>
 </html>

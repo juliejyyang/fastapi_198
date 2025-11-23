@@ -148,7 +148,26 @@ async def stream_data():
                     yield ": keep-alive\n\n"
                 await asyncio.sleep(0.2)
                 continue
-                
+
+    #edit for making the button work --------------------------------------------------
+            if "HELP_BUTTON_PRESSED" in token:
+            # Fetch patient info
+                from backend.db import get_patient
+                patient = await asyncio.to_thread(get_patient, str(patient_id))
+    
+                if patient:
+                # Send patient info directly to frontend
+                    import json
+                    alert_data = {
+                        "type": "HELP_REQUEST",
+                        "name": patient["name"],
+                        "room": patient["room_number"]
+                    }
+                yield f"data: {json.dumps(alert_data)}\n\n"
+    
+                await asyncio.sleep(0.2)
+                continue
+    #end of the edit to make the button work   ---------------------------------
             # extract number substring
             m = NUMBER_RE.search(token)
             if not m:

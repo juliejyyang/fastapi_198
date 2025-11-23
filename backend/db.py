@@ -127,3 +127,11 @@ def get_alerts_7_days(patient_id):
         "triggered_at": {"$gte": week_ago}
     }).sort("triggered_at", -1))
 
+#edit for making the button work maybe--------------------------------------------- 
+# --- HELP REQUESTS ---
+def create_help_request(patient_id):
+    db.help_requests.insert_one({
+        "patient_id": patient_id,
+        "requested_at": datetime.now(timezone.utc),
+        "acknowledged": False
+})
